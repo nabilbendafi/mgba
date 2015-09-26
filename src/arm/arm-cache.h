@@ -50,4 +50,6 @@ void ARMCacheDeinit(struct ARMCore* cpu);
 void ARMCacheFindBlockARM(struct ARMCore* cpu, uint32_t addr);
 void ARMCacheFindBlockThumb(struct ARMCore* cpu, uint32_t addr);
 
+void ARMCacheUpdate(struct ARMCore* cpu, uint32_t address, bool wasActive);
+
 #endif

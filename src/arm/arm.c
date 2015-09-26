@@ -91,6 +91,9 @@ void ARMDeinit(struct ARMCore* cpu) {
 			cpu->components[i]->deinit(cpu->components[i]);
 		}
 	}
+	if (cpu->executor == ARM_CACHED_INTERPRETER) {
+		ARMCacheDeinit(cpu);
+	}
 }
 
 void ARMSetComponents(struct ARMCore* cpu, struct ARMComponent* master, int extra, struct ARMComponent** extras) {

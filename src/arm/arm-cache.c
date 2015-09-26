@@ -243,3 +243,40 @@ void ARMCacheFindBlockThumb(struct ARMCore* cpu, uint32_t addr) {
 	cpu->cache.block = block;
 	cpu->cache.thumb = block->thumb;
 }
+
+void ARMCacheUpdate(struct ARMCore* cpu, uint32_t address, bool wasActive) {
+	if (cpu->cache.active) {
+		if (cpu->cache.block) {
+			if (cpu->cache.block->branchAddress != address) {
+				struct ARMCacheBlock* block = cpu->cache.block;
+				cpu->cache.block->branchAddress = address;
+				if (cpu->executionMode == MODE_THUMB) {
+					ARMCacheFindBlockThumb(cpu, address);
+				} else {
+					ARMCacheFindBlockARM(cpu, address);
+				}
+				block->branch = cpu->cache.block;
+			} else {
+				cpu->cache.block = cpu->cache.block->branch;
+			}
+		} else {
+			if (cpu->executionMode == MODE_THUMB) {
+				ARMCacheFindBlockThumb(cpu, address);
+			} else {
+				ARMCacheFindBlockARM(cpu, address);
+			}
+		}
+		if (cpu->executionMode == MODE_THUMB) {
+			cpu->cache.thumb = cpu->cache.block->thumb;
+			cpu->cache.thumb.data += 2;
+		} else {
+			cpu->cache.arm = cpu->cache.block->arm;
+			cpu->cache.arm.data += 2;
+		}
+		if (!wasActive) {
+			cpu->nextEvent = 0;
+		}
+	} else if (wasActive) {
+		cpu->nextEvent = 0;
+	}
+}

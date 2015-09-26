@@ -297,40 +297,7 @@ static void GBASetActiveRegion(struct ARMCore* cpu, uint32_t address) {
 	cpu->memory.activeSeqCycles16 = memory->waitstatesSeq16[memory->activeRegion];
 	cpu->memory.activeNonseqCycles32 = memory->waitstatesNonseq32[memory->activeRegion];
 	cpu->memory.activeNonseqCycles16 = memory->waitstatesNonseq16[memory->activeRegion];
-	if (cpu->cache.active) {
-		if (cpu->cache.block) {
-			if (cpu->cache.block->branchAddress != address) {
-				struct ARMCacheBlock* block = cpu->cache.block;
-				cpu->cache.block->branchAddress = address;
-				if (cpu->executionMode == MODE_THUMB) {
-					ARMCacheFindBlockThumb(cpu, address);
-				} else {
-					ARMCacheFindBlockARM(cpu, address);
-				}
-				block->branch = cpu->cache.block;
-			} else {
-				cpu->cache.block = cpu->cache.block->branch;
-			}
-		} else {
-			if (cpu->executionMode == MODE_THUMB) {
-				ARMCacheFindBlockThumb(cpu, address);
-			} else {
-				ARMCacheFindBlockARM(cpu, address);
-			}
-		}
-		if (cpu->executionMode == MODE_THUMB) {
-			cpu->cache.thumb = cpu->cache.block->thumb;
-			cpu->cache.thumb.data += 2;
-		} else {
-			cpu->cache.arm = cpu->cache.block->arm;
-			cpu->cache.arm.data += 2;
-		}
-		if (!wasActive) {
-			cpu->nextEvent = 0;
-		}
-	} else if (wasActive) {
-		cpu->nextEvent = 0;
-	}
+	ARMCacheUpdate(cpu, address, wasActive);
 }
 
 #define LOAD_BAD \
