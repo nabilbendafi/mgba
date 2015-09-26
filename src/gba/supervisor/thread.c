@@ -132,6 +132,7 @@ static THREAD_ENTRY _GBAThreadRun(void* context) {
 #endif
 
 	GBACreate(&gba);
+	cpu.executor = ARM_CACHED_INTERPRETER;
 	ARMSetComponents(&cpu, &gba.d, numComponents, components);
 	ARMInit(&cpu);
 	gba.sync = &threadContext->sync;
@@ -271,8 +272,18 @@ static THREAD_ENTRY _GBAThreadRun(void* context) {
 				_changeState(threadContext, THREAD_EXITING, false);
 			}
 		} else {
-			while (threadContext->state == THREAD_RUNNING) {
-				ARMRunLoop(&cpu);
+			switch (cpu.executor) {
+			case ARM_INTERPRETER:
+			default:
+				while (threadContext->state == THREAD_RUNNING) {
+					ARMRunLoop(&cpu);
+				}
+				break;
+			case ARM_CACHED_INTERPRETER:
+				while (threadContext->state == THREAD_RUNNING) {
+					ARMCacheRunLoop(&cpu);
+				}
+				break;
 			}
 		}
 

@@ -238,7 +238,7 @@ static void GBASetActiveRegion(struct ARMCore* cpu, uint32_t address) {
 	gba->lastJump = address;
 	memory->lastPrefetchedPc = 0;
 	memory->lastPrefetchedLoads = 0;
-	if (newRegion == memory->activeRegion && (newRegion < REGION_CART0 || (address & (SIZE_CART0 - 1)) < memory->romSize)) {
+	if (newRegion == memory->activeRegion && (newRegion < REGION_CART0 || (address & (SIZE_CART0 - 1)) < memory->romSize) && !cpu->cache.active) {
 		return;
 	}
 
@@ -246,22 +246,27 @@ static void GBASetActiveRegion(struct ARMCore* cpu, uint32_t address) {
 		memory->biosPrefetch = cpu->prefetch[1];
 	}
 	memory->activeRegion = newRegion;
+	bool wasActive = cpu->executor == ARM_CACHED_INTERPRETER && cpu->cache.active;
 	switch (newRegion) {
 	case REGION_BIOS:
 		cpu->memory.activeRegion = memory->bios;
 		cpu->memory.activeMask = SIZE_BIOS - 1;
+		cpu->cache.active = cpu->executor == ARM_CACHED_INTERPRETER;
 		break;
 	case REGION_WORKING_RAM:
 		cpu->memory.activeRegion = memory->wram;
 		cpu->memory.activeMask = SIZE_WORKING_RAM - 1;
+		cpu->cache.active = false;
 		break;
 	case REGION_WORKING_IRAM:
 		cpu->memory.activeRegion = memory->iwram;
 		cpu->memory.activeMask = SIZE_WORKING_IRAM - 1;
+		cpu->cache.active = false;
 		break;
 	case REGION_VRAM:
 		cpu->memory.activeRegion = (uint32_t*) gba->video.renderer->vram;
 		cpu->memory.activeMask = 0x0000FFFF;
+		cpu->cache.active = false;
 		break;
 	case REGION_CART0:
 	case REGION_CART0_EX:
@@ -271,6 +276,7 @@ static void GBASetActiveRegion(struct ARMCore* cpu, uint32_t address) {
 	case REGION_CART2_EX:
 		cpu->memory.activeRegion = memory->rom;
 		cpu->memory.activeMask = memory->romMask;
+		cpu->cache.active = cpu->executor == ARM_CACHED_INTERPRETER;
 		if ((address & (SIZE_CART0 - 1)) < memory->romSize) {
 			break;
 		}
@@ -279,6 +285,7 @@ static void GBASetActiveRegion(struct ARMCore* cpu, uint32_t address) {
 		memory->activeRegion = -1;
 		cpu->memory.activeRegion = _deadbeef;
 		cpu->memory.activeMask = 0;
+		cpu->cache.active = false;
 		enum GBALogLevel errorLevel = GBA_LOG_FATAL;
 		if (gba->yankedRomSize || !gba->hardCrash) {
 			errorLevel = GBA_LOG_GAME_ERROR;
@@ -290,6 +297,40 @@ static void GBASetActiveRegion(struct ARMCore* cpu, uint32_t address) {
 	cpu->memory.activeSeqCycles16 = memory->waitstatesSeq16[memory->activeRegion];
 	cpu->memory.activeNonseqCycles32 = memory->waitstatesNonseq32[memory->activeRegion];
 	cpu->memory.activeNonseqCycles16 = memory->waitstatesNonseq16[memory->activeRegion];
+	if (cpu->cache.active) {
+		if (cpu->cache.block) {
+			if (cpu->cache.block->branchAddress != address) {
+				struct ARMCacheBlock* block = cpu->cache.block;
+				cpu->cache.block->branchAddress = address;
+				if (cpu->executionMode == MODE_THUMB) {
+					ARMCacheFindBlockThumb(cpu, address);
+				} else {
+					ARMCacheFindBlockARM(cpu, address);
+				}
+				block->branch = cpu->cache.block;
+			} else {
+				cpu->cache.block = cpu->cache.block->branch;
+			}
+		} else {
+			if (cpu->executionMode == MODE_THUMB) {
+				ARMCacheFindBlockThumb(cpu, address);
+			} else {
+				ARMCacheFindBlockARM(cpu, address);
+			}
+		}
+		if (cpu->executionMode == MODE_THUMB) {
+			cpu->cache.thumb = cpu->cache.block->thumb;
+			cpu->cache.thumb.data += 2;
+		} else {
+			cpu->cache.arm = cpu->cache.block->arm;
+			cpu->cache.arm.data += 2;
+		}
+		if (!wasActive) {
+			cpu->nextEvent = 0;
+		}
+	} else if (wasActive) {
+		cpu->nextEvent = 0;
+	}
 }
 
 #define LOAD_BAD \

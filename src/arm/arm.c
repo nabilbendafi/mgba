@@ -69,6 +69,9 @@ static inline enum RegisterBank _ARMSelectBank(enum PrivilegeMode mode) {
 }
 
 void ARMInit(struct ARMCore* cpu) {
+	if (cpu->executor == ARM_CACHED_INTERPRETER) {
+		ARMCacheInit(cpu);
+	}
 	cpu->master->init(cpu, cpu->master);
 	size_t i;
 	for (i = 0; i < cpu->numComponents; ++i) {
@@ -162,8 +165,8 @@ void ARMRaiseIRQ(struct ARMCore* cpu) {
 	cpu->gprs[ARM_LR] = cpu->gprs[ARM_PC] - instructionWidth + WORD_SIZE_ARM;
 	cpu->gprs[ARM_PC] = BASE_IRQ;
 	int currentCycles = 0;
-	ARM_WRITE_PC;
 	_ARMSetMode(cpu, MODE_ARM);
+	ARM_WRITE_PC;
 	cpu->spsr = cpsr;
 	cpu->cpsr.i = 1;
 	cpu->cycles += currentCycles;
@@ -182,8 +185,8 @@ void ARMRaiseSWI(struct ARMCore* cpu) {
 	cpu->gprs[ARM_LR] = cpu->gprs[ARM_PC] - instructionWidth;
 	cpu->gprs[ARM_PC] = BASE_SWI;
 	int currentCycles = 0;
-	ARM_WRITE_PC;
 	_ARMSetMode(cpu, MODE_ARM);
+	ARM_WRITE_PC;
 	cpu->spsr = cpsr;
 	cpu->cpsr.i = 1;
 	cpu->cycles += currentCycles;
@@ -202,8 +205,8 @@ void ARMRaiseUndefined(struct ARMCore* cpu) {
 	cpu->gprs[ARM_LR] = cpu->gprs[ARM_PC] - instructionWidth;
 	cpu->gprs[ARM_PC] = BASE_UNDEF;
 	int currentCycles = 0;
-	ARM_WRITE_PC;
 	_ARMSetMode(cpu, MODE_ARM);
+	ARM_WRITE_PC;
 	cpu->spsr = cpsr;
 	cpu->cpsr.i = 1;
 	cpu->cycles += currentCycles;

@@ -8,6 +8,8 @@
 
 #include "util/common.h"
 
+#include "arm-cache.h"
+
 enum {
 	ARM_SP = 13,
 	ARM_LR = 14,
@@ -60,6 +62,11 @@ enum LSMDirection {
 	LSM_IB = 1,
 	LSM_DA = 2,
 	LSM_DB = 3
+};
+
+enum ARMExecutor {
+	ARM_INTERPRETER = 0,
+	ARM_CACHED_INTERPRETER = 1
 };
 
 struct ARMCore;
@@ -157,6 +164,9 @@ struct ARMCore {
 	struct ARMMemory memory;
 	struct ARMInterruptHandler irqh;
 
+	enum ARMExecutor executor;
+	struct ARMCache cache;
+
 	struct ARMComponent* master;
 
 	size_t numComponents;
@@ -178,5 +188,7 @@ void ARMRaiseUndefined(struct ARMCore*);
 void ARMRun(struct ARMCore* cpu);
 void ARMRunLoop(struct ARMCore* cpu);
 void ARMRunFake(struct ARMCore* cpu, uint32_t opcode);
+
+void ARMCacheRunLoop(struct ARMCore* cpu);
 
 #endif
