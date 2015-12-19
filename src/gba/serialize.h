@@ -136,7 +136,8 @@ extern const uint32_t GBA_SAVESTATE_MAGIC;
  *   | bit 2: Has light sensor value
  *   | bit 3: Has gyroscope value
  *   | bit 4: Has tilt values
- *   | bits 5 - 7: Reserved
+ *   | bit 5: Has Game Boy Player attached
+ *   | bits 6 - 7: Reserved
  * | 0x002B8 - 0x002B9: Gyroscope sample
  * | 0x002BA - 0x002BB: Tilt x sample
  * | 0x002BC - 0x002BD: Tilt y sample
@@ -149,8 +150,11 @@ extern const uint32_t GBA_SAVESTATE_MAGIC;
  * | 0x002C0 - 0x002C0: Light sample
  * | 0x002C1 - 0x002C3: Flags
  *   | bits 0 - 1: Tilt state machine
- *   | bits 2 - 31: Reserved
- * 0x002C4 - 0x002DF: Reserved (leave zero)
+ *   | bits 2 - 3: GB Player inputs posted
+ *   | bits 4 - 8: GB Player transmit position
+ *   | bits 9 - 23: Reserved
+ * 0x002C4 - 0x002C7: Game Boy Player next event
+ * 0x002C8 - 0x002DF: Reserved (leave zero)
  * 0x002E0 - 0x002EF: Savedata state
  * | 0x002E0 - 0x002E0: Savedata type
  * | 0x002E1 - 0x002E1: Savedata command (see savedata.h)
@@ -179,6 +183,33 @@ extern const uint32_t GBA_SAVESTATE_MAGIC;
  * 0x21000 - 0x60FFF: WRAM
  * Total size: 0x61000 (397,312) bytes
  */
+
+DECL_BITFIELD(GBASerializedAudioFlags, uint32_t);
+DECL_BITS(GBASerializedAudioFlags, Ch1Volume, 0, 4);
+DECL_BIT(GBASerializedAudioFlags, Ch1Dead, 4);
+DECL_BIT(GBASerializedAudioFlags, Ch1Hi, 5);
+DECL_BITS(GBASerializedAudioFlags, Ch2Volume, 8, 4);
+DECL_BIT(GBASerializedAudioFlags, Ch2Dead, 12);
+DECL_BIT(GBASerializedAudioFlags, Ch2Hi, 13);
+DECL_BITS(GBASerializedAudioFlags, Ch4Volume, 16, 4);
+DECL_BIT(GBASerializedAudioFlags, Ch4Dead, 20);
+
+DECL_BITFIELD(GBASerializedHWFlags1, uint16_t);
+DECL_BIT(GBASerializedHWFlags1, ReadWrite, 0);
+DECL_BIT(GBASerializedHWFlags1, GyroEdge, 1);
+DECL_BIT(GBASerializedHWFlags1, LightEdge, 2);
+DECL_BITS(GBASerializedHWFlags1, LightCounter, 4, 12);
+
+DECL_BITFIELD(GBASerializedHWFlags2, uint8_t);
+DECL_BITS(GBASerializedHWFlags2, TiltState, 0, 2);
+DECL_BITS(GBASerializedHWFlags2, GbpInputsPosted, 2, 2);
+DECL_BITS(GBASerializedHWFlags2, GbpTxPosition, 4, 5);
+
+DECL_BITFIELD(GBASerializedHWFlags3, uint16_t);
+
+DECL_BITFIELD(GBASerializedSavedataFlags, uint8_t);
+DECL_BITS(GBASerializedSavedataFlags, FlashState, 0, 2);
+DECL_BIT(GBASerializedSavedataFlags, FlashBank, 4);
 
 struct GBASerializedState {
 	uint32_t versionMagic;
@@ -232,18 +263,7 @@ struct GBASerializedState {
 		int32_t eventDiff;
 		int32_t nextSample;
 		uint32_t fifoSize;
-		unsigned ch1Volume : 4;
-		unsigned ch1Dead : 1;
-		unsigned ch1Hi : 1;
-		unsigned : 2;
-		unsigned ch2Volume : 4;
-		unsigned ch2Dead : 1;
-		unsigned ch2Hi : 1;
-		unsigned : 2;
-		unsigned ch4Volume : 4;
-		unsigned ch4Dead : 1;
-		unsigned : 3;
-		unsigned : 8;
+		GBASerializedAudioFlags flags;
 	} audio;
 
 	struct {
@@ -271,30 +291,23 @@ struct GBASerializedState {
 		uint16_t pinDirection;
 		struct GBARTC rtc;
 		uint8_t devices;
-		// Do not change these to uint16_t, this breaks bincompat with some older compilers
-		unsigned gyroSample : 16;
-		unsigned tiltSampleX : 16;
-		unsigned tiltSampleY : 16;
-		unsigned readWrite : 1;
-		unsigned gyroEdge : 1;
-		unsigned lightEdge : 1;
-		unsigned : 1;
-		unsigned lightCounter : 12;
-		unsigned lightSample : 8;
-		unsigned tiltState : 2;
-		unsigned : 22;
+		uint16_t gyroSample;
+		uint16_t tiltSampleX;
+		uint16_t tiltSampleY;
+		GBASerializedHWFlags1 flags1;
+		uint8_t lightSample;
+		GBASerializedHWFlags2 flags2;
+		GBASerializedHWFlags3 flags3;
+		uint32_t gbpNextEvent;
 	} hw;
 
-	uint32_t reservedHardware[7];
+	uint32_t reservedHardware[6];
 
 	struct {
-		unsigned type : 8;
-		unsigned command : 8;
-		unsigned flashState : 2;
-		unsigned : 2;
-		unsigned flashBank : 1;
-		unsigned : 3;
-		unsigned : 8;
+		uint8_t type;
+		uint8_t command;
+		GBASerializedSavedataFlags flags;
+		uint8_t reserved;
 		int32_t readBitsRemaining;
 		uint32_t readAddress;
 		uint32_t writeAddress;
@@ -337,5 +350,7 @@ void GBARecordFrame(struct GBAThread* thread);
 void GBARewindSettingsChanged(struct GBAThread* thread, int newCapacity, int newInterval);
 int GBARewind(struct GBAThread* thread, int nStates);
 void GBARewindAll(struct GBAThread* thread);
+
+void GBATakeScreenshot(struct GBA* gba, struct VDir* dir);
 
 #endif

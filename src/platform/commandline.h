@@ -8,7 +8,7 @@
 
 #include "util/common.h"
 
-#include "gba/supervisor/config.h"
+#include "gba/context/config.h"
 
 enum DebuggerType {
 	DEBUGGER_NONE = 0,
@@ -31,6 +31,7 @@ struct GBAArguments {
 	enum DebuggerType debuggerType;
 	bool debugAtStart;
 	bool showHelp;
+	bool showVersion;
 };
 
 struct SubParser {
@@ -42,14 +43,17 @@ struct SubParser {
 
 struct GraphicsOpts {
 	int multiplier;
+	bool fullscreen;
 };
 
 struct GBAThread;
 
-bool parseArguments(struct GBAArguments* opts, struct GBAConfig* config, int argc, char* const* argv, struct SubParser* subparser);
+bool parseArguments(struct GBAArguments* opts, struct GBAConfig* config, int argc, char* const* argv,
+                    struct SubParser* subparser);
 void freeArguments(struct GBAArguments* opts);
 
 void usage(const char* arg0, const char* extraOptions);
+void version(const char* arg0);
 
 void initParserForGraphics(struct SubParser* parser, struct GraphicsOpts* opts);
 struct ARMDebugger* createDebugger(struct GBAArguments* opts, struct GBAThread* context);

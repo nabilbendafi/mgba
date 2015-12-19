@@ -6,20 +6,24 @@
 #include "formatting.h"
 
 #include <float.h>
+#include <time.h>
 
 int ftostr_l(char* restrict str, size_t size, float f, locale_t locale) {
 #ifdef HAVE_SNPRINTF_L
-	return snprintf_l(str, size, locale, "%*.g", FLT_DIG, f);
+	return snprintf_l(str, size, locale, "%.*g", FLT_DIG, f);
 #elif defined(HAVE_LOCALE)
 	locale_t old = uselocale(locale);
-	int res = snprintf(str, size, "%*.g", FLT_DIG, f);
+	int res = snprintf(str, size, "%.*g", FLT_DIG, f);
 	uselocale(old);
 	return res;
-#else
+#elif defined(HAVE_SETLOCALE)
 	char* old = setlocale(LC_NUMERIC, locale);
-	int res = snprintf(str, size, "%*.g", FLT_DIG, f);
+	int res = snprintf(str, size, "%.*g", FLT_DIG, f);
 	setlocale(LC_NUMERIC, old);
 	return res;
+#else
+	UNUSED(locale);
+	return snprintf(str, size, "%.*g", FLT_DIG, f);
 #endif
 }
 
@@ -30,11 +34,14 @@ float strtof_l(const char* restrict str, char** restrict end, locale_t locale) {
 	float res = strtof(str, end);
 	uselocale(old);
 	return res;
-#else
+#elif defined(HAVE_SETLOCALE)
 	char* old = setlocale(LC_NUMERIC, locale);
 	float res = strtof(str, end);
 	setlocale(LC_NUMERIC, old);
 	return res;
+#else
+	UNUSED(locale);
+	return strtof(str, end);
 #endif
 }
 #endif
@@ -64,3 +71,17 @@ float strtof_u(const char* restrict str, char** restrict end) {
 #endif
 	return res;
 }
+
+#ifndef HAVE_LOCALTIME_R
+struct tm* localtime_r(const time_t* t, struct tm* date) {
+#ifdef _WIN32
+	localtime_s(date, t);
+	return date;
+#elif defined(PSP2)
+	return sceKernelLibcLocaltime_r(t, date);
+#else
+#warning localtime_r not emulated on this platform
+	return 0;
+#endif
+}
+#endif

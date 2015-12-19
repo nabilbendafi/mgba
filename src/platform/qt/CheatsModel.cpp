@@ -5,6 +5,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "CheatsModel.h"
 
+#include "LogController.h"
 #include "VFileDevice.h"
 
 #include <QFont>
@@ -41,6 +42,10 @@ QVariant CheatsModel::data(const QModelIndex& index, int role) const {
 		}
 	}
 
+	if (index.row() >= GBACheatSetsSize(&m_device->cheats)) {
+		return QVariant();
+	}
+
 	int row = index.row();
 	const GBACheatSet* cheats = *GBACheatSetsGetPointer(&m_device->cheats, index.row());
 	switch (role) {
@@ -55,7 +60,7 @@ QVariant CheatsModel::data(const QModelIndex& index, int role) const {
 }
 
 bool CheatsModel::setData(const QModelIndex& index, const QVariant& value, int role) {
-	if (!index.isValid() || index.parent().isValid()) {
+	if (!index.isValid() || index.parent().isValid() || index.row() > GBACheatSetsSize(&m_device->cheats)) {
 		return false;
 	}
 
@@ -68,7 +73,7 @@ bool CheatsModel::setData(const QModelIndex& index, const QVariant& value, int r
 			free(cheats->name);
 			cheats->name = nullptr;
 		}
-		cheats->name = strdup(value.toString().toLocal8Bit().constData());
+		cheats->name = strdup(value.toString().toUtf8().constData());
 		emit dataChanged(index, index);
 		return true;
 	case Qt::CheckStateRole:
@@ -104,7 +109,7 @@ QModelIndex CheatsModel::parent(const QModelIndex& index) const {
 	return QModelIndex();
 }
 
-Qt::ItemFlags CheatsModel::flags(const QModelIndex &index) const {
+Qt::ItemFlags CheatsModel::flags(const QModelIndex& index) const {
 	if (!index.isValid()) {
 		return 0;
 	}
@@ -138,11 +143,14 @@ GBACheatSet* CheatsModel::itemAt(const QModelIndex& index) {
 	if (index.parent().isValid()) {
 		return static_cast<GBACheatSet*>(index.internalPointer());
 	}
+	if (index.row() >= GBACheatSetsSize(&m_device->cheats)) {
+		return nullptr;
+	}
 	return *GBACheatSetsGetPointer(&m_device->cheats, index.row());
 }
 
 void CheatsModel::removeAt(const QModelIndex& index) {
-	if (!index.isValid() || index.parent().isValid()) {
+	if (!index.isValid() || index.parent().isValid() || index.row() >= GBACheatSetsSize(&m_device->cheats)) {
 		return;
 	}
 	int row = index.row();
@@ -152,7 +160,6 @@ void CheatsModel::removeAt(const QModelIndex& index) {
 	GBACheatSetDeinit(set);
 	delete set;
 	endInsertRows();
-
 }
 
 QString CheatsModel::toString(const QModelIndexList& indices) const {
@@ -204,6 +211,7 @@ void CheatsModel::endAppendRow() {
 void CheatsModel::loadFile(const QString& path) {
 	VFile* vf = VFileDevice::open(path, O_RDONLY);
 	if (!vf) {
+		LOG(WARN) << tr("Failed to open cheats file: %1").arg(path);
 		return;
 	}
 	beginResetModel();

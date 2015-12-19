@@ -23,9 +23,9 @@ struct GBAVideoSoftwareSprite {
 };
 
 struct GBAVideoSoftwareBackground {
-	int index;
+	unsigned index;
 	int enabled;
-	int priority;
+	unsigned priority;
 	uint32_t charBase;
 	int mosaic;
 	int multipalette;
@@ -71,6 +71,7 @@ enum {
 #define FLAG_INDEX          0x30000000
 #define FLAG_IS_BACKGROUND  0x08000000
 #define FLAG_UNWRITTEN      0xFC000000
+#define FLAG_REBLEND        0x04000000
 #define FLAG_TARGET_1       0x02000000
 #define FLAG_TARGET_2       0x01000000
 #define FLAG_OBJWIN         0x01000000
@@ -114,6 +115,8 @@ struct GBAVideoSoftwareRenderer {
 
 	color_t* outputBuffer;
 	int outputBufferStride;
+
+	uint32_t* temporaryBuffer;
 
 	GBARegisterDISPCNT dispcnt;
 

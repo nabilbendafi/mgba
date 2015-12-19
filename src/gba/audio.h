@@ -128,7 +128,7 @@ struct GBAAudioChannel4 {
 		int32_t endTime;
 	} control;
 
-	unsigned lfsr;
+	uint32_t lfsr;
 	int8_t sample;
 };
 
@@ -279,7 +279,8 @@ void GBAAudioSampleFIFO(struct GBAAudio* audio, int fifoId, int32_t cycles);
 
 #if RESAMPLE_LIBRARY != RESAMPLE_BLIP_BUF
 unsigned GBAAudioCopy(struct GBAAudio* audio, void* left, void* right, unsigned nSamples);
-unsigned GBAAudioResampleNN(struct GBAAudio*, float ratio, float* drift, struct GBAStereoSample* output, unsigned nSamples);
+unsigned GBAAudioResampleNN(struct GBAAudio*, float ratio, float* drift, struct GBAStereoSample* output,
+                            unsigned nSamples);
 #endif
 
 struct GBASerializedState;

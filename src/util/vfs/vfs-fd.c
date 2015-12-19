@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #ifndef _WIN32
 #include <sys/mman.h>
+#else
+#include <windows.h>
 #endif
 
 struct VFileFD {
@@ -22,12 +24,12 @@ struct VFileFD {
 static bool _vfdClose(struct VFile* vf);
 static off_t _vfdSeek(struct VFile* vf, off_t offset, int whence);
 static ssize_t _vfdRead(struct VFile* vf, void* buffer, size_t size);
-static ssize_t _vfdReadline(struct VFile* vf, char* buffer, size_t size);
 static ssize_t _vfdWrite(struct VFile* vf, const void* buffer, size_t size);
 static void* _vfdMap(struct VFile* vf, size_t size, int flags);
 static void _vfdUnmap(struct VFile* vf, void* memory, size_t size);
 static void _vfdTruncate(struct VFile* vf, size_t size);
 static ssize_t _vfdSize(struct VFile* vf);
+static bool _vfdSync(struct VFile* vf, const void* buffer, size_t size);
 
 struct VFile* VFileOpenFD(const char* path, int flags) {
 	if (!path) {
@@ -35,8 +37,12 @@ struct VFile* VFileOpenFD(const char* path, int flags) {
 	}
 #ifdef _WIN32
 	flags |= O_BINARY;
-#endif
+	wchar_t wpath[PATH_MAX];
+	MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, sizeof(wpath) / sizeof(*wpath));
+	int fd = _wopen(wpath, flags, 0666);
+#else
 	int fd = open(path, flags, 0666);
+#endif
 	return VFileFromFD(fd);
 }
 
@@ -54,12 +60,13 @@ struct VFile* VFileFromFD(int fd) {
 	vfd->d.close = _vfdClose;
 	vfd->d.seek = _vfdSeek;
 	vfd->d.read = _vfdRead;
-	vfd->d.readline = _vfdReadline;
+	vfd->d.readline = VFileReadline;
 	vfd->d.write = _vfdWrite;
 	vfd->d.map = _vfdMap;
 	vfd->d.unmap = _vfdUnmap;
 	vfd->d.truncate = _vfdTruncate;
 	vfd->d.size = _vfdSize;
+	vfd->d.sync = _vfdSync;
 
 	return &vfd->d;
 }
@@ -81,20 +88,6 @@ off_t _vfdSeek(struct VFile* vf, off_t offset, int whence) {
 ssize_t _vfdRead(struct VFile* vf, void* buffer, size_t size) {
 	struct VFileFD* vfd = (struct VFileFD*) vf;
 	return read(vfd->fd, buffer, size);
-}
-
-ssize_t _vfdReadline(struct VFile* vf, char* buffer, size_t size) {
-	struct VFileFD* vfd = (struct VFileFD*) vf;
-	size_t bytesRead = 0;
-	while (bytesRead < size - 1) {
-		size_t newRead = read(vfd->fd, &buffer[bytesRead], 1);
-		if (!newRead || buffer[bytesRead] == '\n') {
-			break;
-		}
-		bytesRead += newRead;
-	}
-	buffer[bytesRead] = '\0';
-	return bytesRead;
 }
 
 ssize_t _vfdWrite(struct VFile* vf, const void* buffer, size_t size) {
@@ -159,4 +152,15 @@ static ssize_t _vfdSize(struct VFile* vf) {
 		return -1;
 	}
 	return stat.st_size;
+}
+
+static bool _vfdSync(struct VFile* vf, const void* buffer, size_t size) {
+	UNUSED(buffer);
+	UNUSED(size);
+	struct VFileFD* vfd = (struct VFileFD*) vf;
+#ifndef _WIN32
+	return fsync(vfd->fd) == 0;
+#else
+	return FlushFileBuffers((HANDLE) _get_osfhandle(vfd->fd));
+#endif
 }

@@ -15,6 +15,7 @@
 struct GBASDLAudio {
 	// Input
 	size_t samples;
+	unsigned sampleRate;
 
 	// State
 	SDL_AudioSpec desiredSpec;
@@ -30,6 +31,7 @@ struct GBASDLAudio {
 #endif
 
 	struct GBAThread* thread;
+	struct GBA* gba;
 };
 
 bool GBASDLInitAudio(struct GBASDLAudio* context, struct GBAThread* threadContext);

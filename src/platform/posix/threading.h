@@ -10,7 +10,7 @@
 
 #include <pthread.h>
 #include <sys/time.h>
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <pthread_np.h>
 #endif
 
@@ -31,6 +31,10 @@ static inline int MutexDeinit(Mutex* mutex) {
 
 static inline int MutexLock(Mutex* mutex) {
 	return pthread_mutex_lock(mutex);
+}
+
+static inline int MutexTryLock(Mutex* mutex) {
+	return pthread_mutex_trylock(mutex);
 }
 
 static inline int MutexUnlock(Mutex* mutex) {
@@ -79,11 +83,14 @@ static inline int ThreadJoin(Thread thread) {
 static inline int ThreadSetName(const char* name) {
 #ifdef __APPLE__
 	return pthread_setname_np(name);
-#elif defined(__FreeBSD__)
+#elif defined(__FreeBSD__) || defined(__OpenBSD__)
 	pthread_set_name_np(pthread_self(), name);
 	return 0;
-#else
+#elif !defined(BUILD_PANDORA) // Pandora's glibc is too old
 	return pthread_setname_np(pthread_self(), name);
+#else
+	UNUSED(name);
+	return 0;
 #endif
 }
 

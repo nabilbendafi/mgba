@@ -29,6 +29,12 @@ enum {
 	MAP_WRITE = 2
 };
 
+enum VFSType {
+	VFS_UNKNOWN = 0,
+	VFS_FILE,
+	VFS_DIRECTORY
+};
+
 struct VFile {
 	bool (*close)(struct VFile* vf);
 	off_t (*seek)(struct VFile* vf, off_t offset, int whence);
@@ -39,10 +45,12 @@ struct VFile {
 	void (*unmap)(struct VFile* vf, void* memory, size_t size);
 	void (*truncate)(struct VFile* vf, size_t size);
 	ssize_t (*size)(struct VFile* vf);
+	bool (*sync)(struct VFile* vf, const void* buffer, size_t size);
 };
 
 struct VDirEntry {
 	const char* (*name)(struct VDirEntry* vde);
+	enum VFSType (*type)(struct VDirEntry* vde);
 };
 
 struct VDir {
@@ -50,6 +58,7 @@ struct VDir {
 	void (*rewind)(struct VDir* vd);
 	struct VDirEntry* (*listNext)(struct VDir* vd);
 	struct VFile* (*openFile)(struct VDir* vd, const char* name, int mode);
+	struct VDir* (*openDir)(struct VDir* vd, const char* name);
 };
 
 struct VFile* VFileOpen(const char* path, int flags);
@@ -61,6 +70,7 @@ struct VFile* VFileFromMemory(void* mem, size_t size);
 struct VFile* VFileFromFILE(FILE* file);
 
 struct VDir* VDirOpen(const char* path);
+struct VDir* VDirOpenArchive(const char* path);
 
 #ifdef USE_LIBZIP
 struct VDir* VDirOpenZip(const char* path, int flags);
@@ -70,8 +80,12 @@ struct VDir* VDirOpenZip(const char* path, int flags);
 struct VDir* VDirOpen7z(const char* path, int flags);
 #endif
 
-struct VFile* VDirOptionalOpenFile(struct VDir* dir, const char* realPath, const char* prefix, const char* suffix, int mode);
-struct VFile* VDirOptionalOpenIncrementFile(struct VDir* dir, const char* realPath, const char* prefix, const char* infix, const char* suffix, int mode);
+struct VDir* VDeviceList(void);
+
+struct VFile* VDirOptionalOpenFile(struct VDir* dir, const char* realPath, const char* prefix, const char* suffix,
+                                   int mode);
+struct VFile* VDirOptionalOpenIncrementFile(struct VDir* dir, const char* realPath, const char* prefix,
+                                            const char* infix, const char* suffix, int mode);
 
 ssize_t VFileReadline(struct VFile* vf, char* buffer, size_t size);
 

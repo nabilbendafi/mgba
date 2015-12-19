@@ -86,7 +86,6 @@ enum DMATiming {
 	DMA_TIMING_CUSTOM = 3
 };
 
-
 DECL_BITFIELD(GBADMARegister, uint16_t);
 DECL_BITS(GBADMARegister, DestControl, 5, 2);
 DECL_BITS(GBADMARegister, SrcControl, 7, 2);
@@ -119,6 +118,7 @@ struct GBAMemory {
 	struct GBACartridgeHardware hw;
 	struct GBASavedata savedata;
 	size_t romSize;
+	uint32_t romMask;
 	uint16_t romID;
 	int fullBios;
 
@@ -131,6 +131,9 @@ struct GBAMemory {
 	char waitstatesPrefetchNonseq32[16];
 	char waitstatesPrefetchNonseq16[16];
 	int activeRegion;
+	bool prefetch;
+	uint32_t lastPrefetchedPc;
+	uint32_t lastPrefetchedLoads;
 	uint32_t biosPrefetch;
 
 	struct GBADMA dma[4];
@@ -148,21 +151,29 @@ uint32_t GBALoad32(struct ARMCore* cpu, uint32_t address, int* cycleCounter);
 uint32_t GBALoad16(struct ARMCore* cpu, uint32_t address, int* cycleCounter);
 uint32_t GBALoad8(struct ARMCore* cpu, uint32_t address, int* cycleCounter);
 
+uint32_t GBALoadBad(struct ARMCore* cpu);
+
 void GBAStore32(struct ARMCore* cpu, uint32_t address, int32_t value, int* cycleCounter);
 void GBAStore16(struct ARMCore* cpu, uint32_t address, int16_t value, int* cycleCounter);
 void GBAStore8(struct ARMCore* cpu, uint32_t address, int8_t value, int* cycleCounter);
+
+uint32_t GBAView32(struct ARMCore* cpu, uint32_t address);
+uint16_t GBAView16(struct ARMCore* cpu, uint32_t address);
+uint8_t GBAView8(struct ARMCore* cpu, uint32_t address);
 
 void GBAPatch32(struct ARMCore* cpu, uint32_t address, int32_t value, int32_t* old);
 void GBAPatch16(struct ARMCore* cpu, uint32_t address, int16_t value, int16_t* old);
 void GBAPatch8(struct ARMCore* cpu, uint32_t address, int8_t value, int8_t* old);
 
-uint32_t GBALoadMultiple(struct ARMCore*, uint32_t baseAddress, int mask, enum LSMDirection direction, int* cycleCounter);
-uint32_t GBAStoreMultiple(struct ARMCore*, uint32_t baseAddress, int mask, enum LSMDirection direction, int* cycleCounter);
+uint32_t GBALoadMultiple(struct ARMCore*, uint32_t baseAddress, int mask, enum LSMDirection direction,
+                         int* cycleCounter);
+uint32_t GBAStoreMultiple(struct ARMCore*, uint32_t baseAddress, int mask, enum LSMDirection direction,
+                          int* cycleCounter);
 
 void GBAAdjustWaitstates(struct GBA* gba, uint16_t parameters);
 
-void GBAMemoryWriteDMASAD(struct GBA* gba, int dma, uint32_t address);
-void GBAMemoryWriteDMADAD(struct GBA* gba, int dma, uint32_t address);
+uint32_t GBAMemoryWriteDMASAD(struct GBA* gba, int dma, uint32_t address);
+uint32_t GBAMemoryWriteDMADAD(struct GBA* gba, int dma, uint32_t address);
 void GBAMemoryWriteDMACNT_LO(struct GBA* gba, int dma, uint16_t count);
 uint16_t GBAMemoryWriteDMACNT_HI(struct GBA* gba, int dma, uint16_t control);
 

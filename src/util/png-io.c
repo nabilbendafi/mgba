@@ -43,17 +43,20 @@ png_infop PNGWriteHeader(png_structp png, unsigned width, unsigned height) {
 	if (!info) {
 		return 0;
 	}
+	if (setjmp(png_jmpbuf(png))) {
+		return 0;
+	}
 	png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 	png_write_info(png, info);
 	return info;
 }
 
-bool PNGWritePixels(png_structp png, unsigned width, unsigned height, unsigned stride, void* pixels) {
+bool PNGWritePixels(png_structp png, unsigned width, unsigned height, unsigned stride, const void* pixels) {
 	png_bytep row = malloc(sizeof(png_bytep) * width * 3);
 	if (!row) {
 		return false;
 	}
-	png_bytep pixelData = pixels;
+	const png_byte* pixelData = pixels;
 	if (setjmp(png_jmpbuf(png))) {
 		free(row);
 		return false;
@@ -62,9 +65,15 @@ bool PNGWritePixels(png_structp png, unsigned width, unsigned height, unsigned s
 	for (i = 0; i < height; ++i) {
 		unsigned x;
 		for (x = 0; x < width; ++x) {
+#ifdef __BIG_ENDIAN__
+			row[x * 3] = pixelData[stride * i * 4 + x * 4 + 3];
+			row[x * 3 + 1] = pixelData[stride * i * 4 + x * 4 + 2];
+			row[x * 3 + 2] = pixelData[stride * i * 4 + x * 4 + 1];
+#else
 			row[x * 3] = pixelData[stride * i * 4 + x * 4];
 			row[x * 3 + 1] = pixelData[stride * i * 4 + x * 4 + 1];
 			row[x * 3 + 2] = pixelData[stride * i * 4 + x * 4 + 2];
+#endif
 		}
 		png_write_row(png, row);
 	}
@@ -81,7 +90,7 @@ bool PNGWriteCustomChunk(png_structp png, const char* name, size_t size, void* d
 	if (setjmp(png_jmpbuf(png))) {
 		return false;
 	}
-	png_write_chunk(png, (const png_bytep) realName, data, size);
+	png_write_chunk(png, (png_bytep) realName, data, size);
 	return true;
 }
 
@@ -117,7 +126,7 @@ bool PNGInstallChunkHandler(png_structp png, void* context, ChunkHandler handler
 		return false;
 	}
 	png_set_read_user_chunk_fn(png, context, handler);
-	png_set_keep_unknown_chunks(png, PNG_HANDLE_CHUNK_ALWAYS, (const png_bytep) chunkName, 1);
+	png_set_keep_unknown_chunks(png, PNG_HANDLE_CHUNK_ALWAYS, (png_bytep) chunkName, 1);
 	return true;
 }
 
@@ -164,9 +173,15 @@ bool PNGReadPixels(png_structp png, png_infop info, void* pixels, unsigned width
 		png_read_row(png, row, 0);
 		unsigned x;
 		for (x = 0; x < pngWidth; ++x) {
+#if __BIG_ENDIAN__
+			pixelData[stride * i * 4 + x * 4 + 3] = row[x * 3];
+			pixelData[stride * i * 4 + x * 4 + 2] = row[x * 3 + 1];
+			pixelData[stride * i * 4 + x * 4 + 1] = row[x * 3 + 2];
+#else
 			pixelData[stride * i * 4 + x * 4] = row[x * 3];
 			pixelData[stride * i * 4 + x * 4 + 1] = row[x * 3 + 1];
 			pixelData[stride * i * 4 + x * 4 + 2] = row[x * 3 + 2];
+#endif
 		}
 	}
 	free(row);

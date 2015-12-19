@@ -98,11 +98,7 @@
 			tileData &= 0xF; \
 			tileData |= tileData << 4; \
 			tileData |= tileData << 8; \
-			tileData |= tileData << 12; \
 			tileData |= tileData << 16; \
-			tileData |= tileData << 20; \
-			tileData |= tileData << 24; \
-			tileData |= tileData << 28; \
 			carryData = tileData; \
 		} \
 	} \
@@ -126,11 +122,7 @@
 					tileData &= 0xF; \
 					tileData |= tileData << 4; \
 					tileData |= tileData << 8; \
-					tileData |= tileData << 12; \
 					tileData |= tileData << 16; \
-					tileData |= tileData << 20; \
-					tileData |= tileData << 24; \
-					tileData |= tileData << 28; \
 					carryData = tileData; \
 				} \
 				mosaicWait = mosaicH; \
@@ -414,7 +406,7 @@
 			return; \
 		} \
 		if (UNLIKELY(end < outX)) { \
-			GBALog(0, GBA_LOG_DANGER, "Out of bounds background draw!"); \
+			GBALog(0, GBA_LOG_FATAL, "Out of bounds background draw!"); \
 			return; \
 		} \
 		DRAW_BACKGROUND_MODE_0_TILE_SUFFIX_ ## BPP (BLEND, OBJWIN) \
@@ -476,14 +468,14 @@ void GBAVideoSoftwareRendererDrawBackgroundMode0(struct GBAVideoSoftwareRenderer
 
 	unsigned xBase;
 
-	int flags = (background->priority << OFFSET_PRIORITY) | (background->index << OFFSET_INDEX) | FLAG_IS_BACKGROUND;
+	uint32_t flags = (background->priority << OFFSET_PRIORITY) | (background->index << OFFSET_INDEX) | FLAG_IS_BACKGROUND;
 	flags |= FLAG_TARGET_2 * background->target2;
 	int objwinFlags = FLAG_TARGET_1 * (background->target1 && renderer->blendEffect == BLEND_ALPHA && GBAWindowControlIsBlendEnable(renderer->objwin.packed));
 	objwinFlags |= flags;
 	flags |= FLAG_TARGET_1 * (background->target1 && renderer->blendEffect == BLEND_ALPHA && GBAWindowControlIsBlendEnable(renderer->currentWindow.packed));
-	if (renderer->blda == 0x10 && renderer->bldb == 0) {
+	if (renderer->blendEffect == BLEND_ALPHA && renderer->blda == 0x10 && renderer->bldb == 0) {
 		flags &= ~(FLAG_TARGET_1 | FLAG_TARGET_2);
-		objwinFlags &= ~(FLAG_TARGET_1 | FLAG_TARGET_2); \
+		objwinFlags &= ~(FLAG_TARGET_1 | FLAG_TARGET_2);
 	}
 
 	uint32_t screenBase;

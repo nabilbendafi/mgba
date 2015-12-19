@@ -11,6 +11,7 @@
 #include "arm.h"
 #include "debugger/debugger.h"
 
+#include "gba/interface.h"
 #include "gba/memory.h"
 #include "gba/video.h"
 #include "gba/audio.h"
@@ -35,43 +36,6 @@ enum GBAIRQ {
 	IRQ_GAMEPAK = 0xD
 };
 
-enum GBALogLevel {
-	GBA_LOG_FATAL = 0x01,
-	GBA_LOG_ERROR = 0x02,
-	GBA_LOG_WARN = 0x04,
-	GBA_LOG_INFO = 0x08,
-	GBA_LOG_DEBUG = 0x10,
-	GBA_LOG_STUB = 0x20,
-
-	GBA_LOG_GAME_ERROR = 0x100,
-	GBA_LOG_SWI = 0x200,
-	GBA_LOG_STATUS = 0x400,
-	GBA_LOG_SIO = 0x800,
-
-	GBA_LOG_ALL = 0xF3F,
-
-#ifdef NDEBUG
-	GBA_LOG_DANGER = GBA_LOG_ERROR
-#else
-	GBA_LOG_DANGER = GBA_LOG_FATAL
-#endif
-};
-
-enum GBAKey {
-	GBA_KEY_A = 0,
-	GBA_KEY_B = 1,
-	GBA_KEY_SELECT = 2,
-	GBA_KEY_START = 3,
-	GBA_KEY_RIGHT = 4,
-	GBA_KEY_LEFT = 5,
-	GBA_KEY_UP = 6,
-	GBA_KEY_DOWN = 7,
-	GBA_KEY_R = 8,
-	GBA_KEY_L = 9,
-	GBA_KEY_MAX,
-	GBA_KEY_NONE = -1
-};
-
 enum GBAComponent {
 	GBA_COMPONENT_DEBUGGER,
 	GBA_COMPONENT_CHEAT_DEVICE,
@@ -91,18 +55,15 @@ enum {
 };
 
 struct GBA;
-struct GBARotationSource;
 struct GBAThread;
 struct Patch;
 struct VFile;
 
-typedef void (*GBALogHandler)(struct GBAThread*, enum GBALogLevel, const char* format, va_list args);
-
-struct GBAAVStream {
-	void (*postVideoFrame)(struct GBAAVStream*, struct GBAVideoRenderer* renderer);
-	void (*postAudioFrame)(struct GBAAVStream*, int16_t left, int16_t right);
-	void (*postAudioBuffer)(struct GBAAVStream*, struct GBAAudio*);
-};
+DECL_BITFIELD(GBATimerFlags, uint32_t);
+DECL_BITS(GBATimerFlags, PrescaleBits, 0, 4);
+DECL_BIT(GBATimerFlags, CountUp, 4);
+DECL_BIT(GBATimerFlags, DoIrq, 5);
+DECL_BIT(GBATimerFlags, Enable, 6);
 
 struct GBATimer {
 	uint16_t reload;
@@ -110,10 +71,7 @@ struct GBATimer {
 	int32_t lastEvent;
 	int32_t nextEvent;
 	int32_t overflowInterval;
-	unsigned prescaleBits : 4;
-	unsigned countUp : 1;
-	unsigned doIrq : 1;
-	unsigned enable : 1;
+	GBATimerFlags flags;
 };
 
 struct GBA {
@@ -130,7 +88,7 @@ struct GBA {
 	struct ARMDebugger* debugger;
 
 	uint32_t bus;
-	bool performingDMA;
+	int performingDMA;
 
 	int timersEnabled;
 	struct GBATimer timers[4];
@@ -156,6 +114,8 @@ struct GBA {
 	GBALogHandler logHandler;
 	enum GBALogLevel logLevel;
 	struct GBAAVStream* stream;
+	struct GBAKeyCallback* keyCallback;
+	struct GBAStopCallback* stopCallback;
 
 	enum GBAIdleLoopOptimization idleOptimization;
 	uint32_t idleLoop;
@@ -167,6 +127,7 @@ struct GBA {
 	bool taintedRegisters[16];
 
 	bool realisticTiming;
+	bool hardCrash;
 };
 
 struct GBACartridge {
@@ -188,7 +149,7 @@ void GBACreate(struct GBA* gba);
 void GBADestroy(struct GBA* gba);
 
 void GBAReset(struct ARMCore* cpu);
-void GBASkipBIOS(struct ARMCore* cpu);
+void GBASkipBIOS(struct GBA* gba);
 
 void GBATimerUpdateRegister(struct GBA* gba, int timer);
 void GBATimerWriteTMCNT_LO(struct GBA* gba, int timer, uint16_t value);
@@ -199,20 +160,25 @@ void GBAWriteIME(struct GBA* gba, uint16_t value);
 void GBARaiseIRQ(struct GBA* gba, enum GBAIRQ irq);
 void GBATestIRQ(struct ARMCore* cpu);
 void GBAHalt(struct GBA* gba);
+void GBAStop(struct GBA* gba);
 
 void GBAAttachDebugger(struct GBA* gba, struct ARMDebugger* debugger);
 void GBADetachDebugger(struct GBA* gba);
 
-void GBASetBreakpoint(struct GBA* gba, struct ARMComponent* component, uint32_t address, enum ExecutionMode mode, uint32_t* opcode);
+void GBASetBreakpoint(struct GBA* gba, struct ARMComponent* component, uint32_t address, enum ExecutionMode mode,
+                      uint32_t* opcode);
 void GBAClearBreakpoint(struct GBA* gba, uint32_t address, enum ExecutionMode mode, uint32_t opcode);
 
-void GBALoadROM(struct GBA* gba, struct VFile* vf, struct VFile* sav, const char* fname);
+bool GBALoadROM(struct GBA* gba, struct VFile* vf, struct VFile* sav, const char* fname);
 void GBAYankROM(struct GBA* gba);
 void GBAUnloadROM(struct GBA* gba);
 void GBALoadBIOS(struct GBA* gba, struct VFile* vf);
 void GBAApplyPatch(struct GBA* gba, struct Patch* patch);
 
+bool GBALoadMB(struct GBA* gba, struct VFile* vf, const char* fname);
+
 bool GBAIsROM(struct VFile* vf);
+bool GBAIsMB(struct VFile* vf);
 bool GBAIsBIOS(struct VFile* vf);
 void GBAGetGameCode(struct GBA* gba, char* out);
 void GBAGetGameTitle(struct GBA* gba, char* out);
@@ -220,7 +186,7 @@ void GBAGetGameTitle(struct GBA* gba, char* out);
 void GBAFrameStarted(struct GBA* gba);
 void GBAFrameEnded(struct GBA* gba);
 
-ATTRIBUTE_FORMAT(printf,3,4)
+ATTRIBUTE_FORMAT(printf, 3, 4)
 void GBALog(struct GBA* gba, enum GBALogLevel level, const char* format, ...);
 
 ATTRIBUTE_FORMAT(printf, 3, 4)

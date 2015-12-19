@@ -13,6 +13,10 @@
 #include "platform/posix/threading.h"
 #elif _WIN32
 #include "platform/windows/threading.h"
+#elif PSP2
+#include "platform/psp2/threading.h"
+#elif _3DS
+#include "platform/3ds/threading.h"
 #else
 #define DISABLE_THREADING
 #endif
@@ -33,6 +37,11 @@ static inline int MutexDeinit(Mutex* mutex) {
 }
 
 static inline int MutexLock(Mutex* mutex) {
+	UNUSED(mutex);
+	return 0;
+}
+
+static inline int MutexTryLock(Mutex* mutex) {
 	UNUSED(mutex);
 	return 0;
 }

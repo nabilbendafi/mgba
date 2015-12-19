@@ -103,7 +103,7 @@ void ARMDebuggerRun(struct ARMDebugger* debugger) {
 void ARMDebuggerEnter(struct ARMDebugger* debugger, enum DebuggerEntryReason reason, struct DebuggerEntryInfo* info) {
 	debugger->state = DEBUGGER_PAUSED;
 	struct ARMCore* cpu = debugger->cpu;
-	cpu->nextEvent = 0;
+	cpu->nextEvent = cpu->cycles;
 	if (reason == DEBUGGER_ENTER_BREAKPOINT) {
 		struct DebugBreakpoint* breakpoint = _lookupBreakpoint(debugger->swBreakpoints, _ARMPCAddress(cpu));
 		debugger->currentBreakpoint = breakpoint;
@@ -155,6 +155,7 @@ void ARMDebuggerClearBreakpoint(struct ARMDebugger* debugger, uint32_t address) 
 		if (breakpoint->address == address) {
 			*previous = *next;
 			free(breakpoint);
+			continue;
 		}
 		previous = next;
 	}
@@ -179,6 +180,7 @@ void ARMDebuggerClearWatchpoint(struct ARMDebugger* debugger, uint32_t address) 
 		if (watchpoint->address == address) {
 			*previous = *next;
 			free(watchpoint);
+			continue;
 		}
 		previous = next;
 	}

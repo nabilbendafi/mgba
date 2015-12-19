@@ -63,7 +63,12 @@ static void _RegisterRamReset(struct GBA* gba) {
 		memset(gba->video.oam.raw, 0, SIZE_OAM);
 	}
 	if (registers & 0x20) {
-		GBALog(gba, GBA_LOG_STUB, "RegisterRamReset on SIO unimplemented");
+		cpu->memory.store16(cpu, BASE_IO | REG_SIOCNT, 0x0000, 0);
+		cpu->memory.store16(cpu, BASE_IO | REG_RCNT, RCNT_INITIAL, 0);
+		cpu->memory.store16(cpu, BASE_IO | REG_SIOMLT_SEND, 0, 0);
+		cpu->memory.store16(cpu, BASE_IO | REG_JOYCNT, 0, 0);
+		cpu->memory.store32(cpu, BASE_IO | REG_JOY_RECV, 0, 0);
+		cpu->memory.store32(cpu, BASE_IO | REG_JOY_TRANS, 0, 0);
 	}
 	if (registers & 0x40) {
 		GBALog(gba, GBA_LOG_STUB, "RegisterRamReset on Audio unimplemented");
@@ -175,7 +180,7 @@ static void _Div(struct GBA* gba, int32_t num, int32_t denom) {
 void GBASwi16(struct ARMCore* cpu, int immediate) {
 	struct GBA* gba = (struct GBA*) cpu->master;
 	GBALog(gba, GBA_LOG_SWI, "SWI: %02X r0: %08X r1: %08X r2: %08X r3: %08X",
-		immediate, cpu->gprs[0], cpu->gprs[1], cpu->gprs[2], cpu->gprs[3]);
+	    immediate, cpu->gprs[0], cpu->gprs[1], cpu->gprs[2], cpu->gprs[3]);
 
 	if (gba->memory.fullBios) {
 		ARMRaiseSWI(cpu);
@@ -191,9 +196,12 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 	case 0x2:
 		GBAHalt(gba);
 		break;
+	case 0x3:
+		GBAStop(gba);
+		break;
 	case 0x05:
-		// VBlankIntrWait
-		// Fall through:
+	// VBlankIntrWait
+	// Fall through:
 	case 0x04:
 		// IntrWait
 		ARMRaiseSWI(cpu);
@@ -205,16 +213,22 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 		_Div(gba, cpu->gprs[1], cpu->gprs[0]);
 		break;
 	case 0x8:
-		cpu->gprs[0] = sqrt(cpu->gprs[0]);
+		cpu->gprs[0] = sqrt((uint32_t) cpu->gprs[0]);
 		break;
 	case 0xA:
 		cpu->gprs[0] = atan2f(cpu->gprs[1] / 16384.f, cpu->gprs[0] / 16384.f) / (2 * M_PI) * 0x10000;
 		break;
 	case 0xB:
 	case 0xC:
-		if (cpu->gprs[0] >> BASE_OFFSET == REGION_BIOS) {
+		if (cpu->gprs[0] >> BASE_OFFSET < REGION_WORKING_RAM) {
 			GBALog(gba, GBA_LOG_GAME_ERROR, "Cannot CpuSet from BIOS");
 			return;
+		}
+		if (cpu->gprs[0] & (cpu->gprs[2] & (1 << 26) ? 3 : 1)) {
+			GBALog(gba, GBA_LOG_GAME_ERROR, "Misaligned CpuSet source");
+		}
+		if (cpu->gprs[1] & (cpu->gprs[2] & (1 << 26) ? 3 : 1)) {
+			GBALog(gba, GBA_LOG_GAME_ERROR, "Misaligned CpuSet destination");
 		}
 		ARMRaiseSWI(cpu);
 		break;
@@ -236,14 +250,14 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 			break;
 		}
 		switch (cpu->gprs[1] >> BASE_OFFSET) {
-			default:
-				GBALog(gba, GBA_LOG_GAME_ERROR, "Bad LZ77 destination");
-				// Fall through
-			case REGION_WORKING_RAM:
-			case REGION_WORKING_IRAM:
-			case REGION_VRAM:
-				_unLz77(gba, immediate == 0x11 ? 1 : 2);
-				break;
+		default:
+			GBALog(gba, GBA_LOG_GAME_ERROR, "Bad LZ77 destination");
+		// Fall through
+		case REGION_WORKING_RAM:
+		case REGION_WORKING_IRAM:
+		case REGION_VRAM:
+			_unLz77(gba, immediate == 0x11 ? 1 : 2);
+			break;
 		}
 		break;
 	case 0x13:
@@ -252,14 +266,14 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 			break;
 		}
 		switch (cpu->gprs[1] >> BASE_OFFSET) {
-			default:
-				GBALog(gba, GBA_LOG_GAME_ERROR, "Bad Huffman destination");
-				// Fall through
-			case REGION_WORKING_RAM:
-			case REGION_WORKING_IRAM:
-			case REGION_VRAM:
-				_unHuffman(gba);
-				break;
+		default:
+			GBALog(gba, GBA_LOG_GAME_ERROR, "Bad Huffman destination");
+		// Fall through
+		case REGION_WORKING_RAM:
+		case REGION_WORKING_IRAM:
+		case REGION_VRAM:
+			_unHuffman(gba);
+			break;
 		}
 		break;
 	case 0x14:
@@ -269,14 +283,14 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 			break;
 		}
 		switch (cpu->gprs[1] >> BASE_OFFSET) {
-			default:
-				GBALog(gba, GBA_LOG_GAME_ERROR, "Bad RL destination");
-				// Fall through
-			case REGION_WORKING_RAM:
-			case REGION_WORKING_IRAM:
-			case REGION_VRAM:
-				_unRl(gba, immediate == 0x14 ? 1 : 2);
-				break;
+		default:
+			GBALog(gba, GBA_LOG_GAME_ERROR, "Bad RL destination");
+		// Fall through
+		case REGION_WORKING_RAM:
+		case REGION_WORKING_IRAM:
+		case REGION_VRAM:
+			_unRl(gba, immediate == 0x14 ? 1 : 2);
+			break;
 		}
 		break;
 	case 0x16:
@@ -287,15 +301,19 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 			break;
 		}
 		switch (cpu->gprs[1] >> BASE_OFFSET) {
-			default:
-				GBALog(gba, GBA_LOG_GAME_ERROR, "Bad UnFilter destination");
-				// Fall through
-			case REGION_WORKING_RAM:
-			case REGION_WORKING_IRAM:
-			case REGION_VRAM:
-				_unFilter(gba, immediate == 0x18 ? 2 : 1, immediate == 0x16 ? 1 : 2);
-				break;
+		default:
+			GBALog(gba, GBA_LOG_GAME_ERROR, "Bad UnFilter destination");
+		// Fall through
+		case REGION_WORKING_RAM:
+		case REGION_WORKING_IRAM:
+		case REGION_VRAM:
+			_unFilter(gba, immediate == 0x18 ? 2 : 1, immediate == 0x16 ? 1 : 2);
+			break;
 		}
+		break;
+	case 0x19:
+		// SoundBias is mostly meaningless here
+		GBALog(gba, GBA_LOG_STUB, "Stub software interrupt: SoundBias (19)");
 		break;
 	case 0x1F:
 		_MidiKey2Freq(gba);
@@ -457,7 +475,6 @@ static void _unHuffman(struct GBA* gba) {
 				block = 0;
 			}
 		}
-
 	}
 	cpu->gprs[0] = source;
 	cpu->gprs[1] = dest;
@@ -465,8 +482,8 @@ static void _unHuffman(struct GBA* gba) {
 
 static void _unRl(struct GBA* gba, int width) {
 	struct ARMCore* cpu = gba->cpu;
-	uint32_t source = cpu->gprs[0] & 0xFFFFFFFC;
-	int remaining = (cpu->memory.load32(cpu, source, 0) & 0xFFFFFF00) >> 8;
+	uint32_t source = cpu->gprs[0];
+	int remaining = (cpu->memory.load32(cpu, source & 0xFFFFFFFC, 0) & 0xFFFFFF00) >> 8;
 	int padding = (4 - remaining) & 0x3;
 	// We assume the signature byte (0x30) is correct
 	int blockheader;
